@@ -1,5 +1,7 @@
 /data/
-!results/predict/.gitkeep
+!data/.gitkeep
 
 /results/predict/
+!results/predict/.gitkeep
+
 /results/train
