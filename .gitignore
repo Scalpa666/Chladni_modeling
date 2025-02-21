@@ -4,4 +4,5 @@
 /results/predict/*
 !results/predict/.gitkeep
 
-/results/train
+/results/train/*
+!results/train/.gitkeep
