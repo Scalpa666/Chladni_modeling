@@ -4,110 +4,131 @@ import torch.optim as optim
 import torch
 import numpy as np
 from torch.utils.data import DataLoader
+from torchmetrics import MeanAbsoluteError, MeanSquaredError
 import matplotlib.pyplot as plt
 
-from models.model import AcDispNet
+from models.model import *
 from models.dataset import DispDataset
 
 
-def train(epoch, dataset, model):
+class RegressionMetrics:
+    def __init__(self):
+        self.mae = MeanAbsoluteError()
+        self.mse = MeanSquaredError()
+        self.r2 = None
+
+    def update(self, outputs, targets):
+        self.mae.update(outputs, targets)
+        self.mse.update(outputs, targets)
+
+    def compute(self):
+        mae = self.mae.compute()
+        mse = self.mse.compute()
+        # rmse = torch.sqrt(mse)
+        return mae, mse
+
+
+def train(total_epochs, dataset, model):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print('Use device:', device)
     model.to(device)
 
     # Training setup
     loss_func = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=1e-2)
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.9)
+    optimizer = optim.Adam(model.parameters(), lr=1e-3)
+    # scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.9)
 
     # Load the data for training
-    dataloader = DataLoader(dataset, batch_size=64, shuffle=True)
+    dataloader = DataLoader(dataset, batch_size=256, shuffle=True)
+
+    # Calculate losses before training
+    model.eval()
+    with torch.no_grad():
+        initial_total_loss = 0
+        for inputs, targets in dataloader:
+            inputs = inputs.to(device)
+            targets = targets.to(device)
+            outputs  = model(inputs)
+            initial_loss = loss_func(outputs , targets)
+            initial_total_loss += initial_loss.item()
+        initial_avg_loss = initial_total_loss / len(dataloader)
+        print(f"Initial Loss before training: {initial_avg_loss:.4f}")
+
+    model.train()
 
     # Record the average loss per epoch
-    loss_avg = []
-    acc_rem = []
-    maxdist_rem = []
-
-    for t in range(epoch):
+    avg_loss_list = []
+    metrics = RegressionMetrics()
+    for epoch in range(total_epochs):
         total_loss = 0
-        for x, y in dataloader:
-            x = x.to(device)
-            y = y.to(device)
-            p = model(x)
+        for inputs, targets in dataloader:
+            # Migrate data to the GPU
+            inputs = inputs.to(device)
+            targets = targets.to(device)
 
-            loss = loss_func(p, y)
+            # Forward propagation
+            outputs = model(inputs)
+            loss = loss_func(outputs , targets)
+
+            # Back propagation
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
             total_loss += loss.item()
+            targets = targets.to('cpu')
+            outputs = outputs.to('cpu')
+            metrics.update(outputs, targets)
 
-        if t % 100 == 0:
-            accuracy, maxdist = acc(dataset, model)
-            acc_rem.append([t] + accuracy)
-            maxdist_rem.append([t] + maxdist)
-            print('Epoch:', t, '| Loss:', total_loss / len(dataloader), '| Acc:', np.max(accuracy))
+        if epoch % 10 == 0:
+            avg_loss = total_loss / len(dataloader)
+            mae, mse = metrics.compute()
+            print(f"Epoch [{epoch + 1}/{total_epochs}] - Loss: {avg_loss} - MAE: {mae} - MSE: {mse:.4f}")
+            avg_loss_list.append([epoch, avg_loss])
 
-        if t % 10 == 0:
-            loss_avg.append([t, total_loss / len(dataloader)])
-        scheduler.step()
+        # Periodically saves the model's training state
+        if (epoch + 1) % 1000 == 0:
+            checkpoint_path = f"checkpoints/model_epoch_{epoch + 1}.pth"
+            torch.save({
+                "epoch": epoch + 1,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+            }, checkpoint_path)
+
+
+        # scheduler.step()
 
     # Plot the loss
     plt.figure()
-    plt.plot([i[0] for i in loss_avg], [i[1] for i in loss_avg], marker='o')
+    plt.plot([i[0] for i in avg_loss_list], [i[1] for i in avg_loss_list], marker='o')
     plt.xlabel('Epoch')
     plt.ylabel('MSE Loss')
     plt.show()
 
     # Save the model
-    torch.save(model.state_dict(), 'checkpoints/model.pth')
+    torch.save(model.state_dict(), 'checkpoints/model_final.pth')
 
     # Save the data during training
-    loss_df = pd.DataFrame(loss_avg, columns=['Epoch', 'Loss'])
+    loss_df = pd.DataFrame(avg_loss_list, columns=['Epoch', 'Loss'])
     loss_df.to_csv('results/train/loss.csv', index=False)
-    acc_df = pd.DataFrame(acc_rem)
-    acc_df.to_csv('results/train/acc.csv', index=False)
-    maxdist_df = pd.DataFrame(maxdist_rem)
-    maxdist_df.to_csv('results/train/maxdist.csv', index=False)
-
-
-def acc(dataset, model):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.to(device)
-    predict_dist = np.zeros(12)
-    max_predict_dist = np.zeros(12)
-    min_predict_dist = np.ones(12) * 100
-    predict_num = np.zeros(12)
-    for x, y in dataset:
-        x = x.to(device)
-        y = y.to(device)
-        p = model(x)
-        dis = torch.sqrt(torch.sum((p - y) ** 2))
-        data_class = int(x[0])
-        predict_dist[data_class] += dis.item()
-        predict_num[data_class] += 1
-        if dis.item() > max_predict_dist[data_class]:
-            max_predict_dist[data_class] = dis.item()
-        if dis.item() < min_predict_dist[data_class]:
-            min_predict_dist[data_class] = dis.item()
-    predict_dist = predict_dist / predict_num
-    predict_dist = predict_dist.tolist()
-    max_predict_dist = max_predict_dist.tolist()
-    print('Min: ', min_predict_dist)
-    return predict_dist, max_predict_dist
 
 
 if __name__ == "__main__":
     # Read data form the file
-    train_data_path = './Data/train_data.csv'
+    train_data_path = './Data/train_data_1.csv'
     train_dataset = DispDataset(train_data_path)
 
     # print('Len of dataset:', len(dataset))
-    # train_dataset, test_dataset = torch.utils.data.random_split(dataset, [int(len(dataset) * 0.8), len(dataset) - int(len(dataset) * 0.8)])
 
     # Initialize the model
-    model = AcDispNet(3, 2)
+    model = AcDispNetL4(3, 2)
     # initial_loss = predict(dataset, model)
 
+    # View initial weight
+    print("Initial weight: ")
+    for param_tensor in model.state_dict():
+        print(param_tensor, "\t", model.state_dict()[param_tensor].size())
+        print(model.state_dict()[param_tensor])
+
     # Train
-    train(200, train_dataset, model)
+    train(10000, train_dataset, model)

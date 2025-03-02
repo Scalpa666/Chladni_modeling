@@ -15,9 +15,9 @@ class DispDataset(Dataset):
         self.disp = torch.from_numpy(data[:, 3:]).float()
 
     def __getitem__(self, index):
-        x = self.freq_pos[index]
-        y = self.disp[index]
-        return x, y
+        inputs = self.freq_pos[index]
+        targets = self.disp[index]
+        return inputs, targets
 
     def __len__(self):
         return len(self.freq_pos)

@@ -6,7 +6,7 @@ import numpy as np
 from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
 
-from models.model import AcDispNet
+from models.model import *
 from models.dataset import DispDataset
 
 
@@ -44,33 +44,33 @@ def test(dataset, model):
     loss_func = nn.MSELoss()
     dataloader = DataLoader(dataset, batch_size=64, shuffle=True)
 
-    accuracy, max_dist = acc(dataset, model)
-    class_std = np.zeros(12)
-    predict_num = np.zeros(12)
+    # accuracy, max_dist = acc(dataset, model)
+    # class_std = np.zeros(12)
+    # predict_num = np.zeros(12)
     total_loss = 0
-
-    for x, y in dataset:
-        x = x.to(device)
-        y = y.to(device)
-        p = model(x)
-
-        loss = loss_func(p, y)
-        total_loss += loss.item()
-
-        dis = torch.sqrt(torch.sum((p - y) ** 2))
-
-        data_class = int(x[0])
-        predict_num[data_class] += 1
-        class_std[data_class] += (accuracy[data_class] - dis.item()) ** 2
-    class_std = class_std / predict_num
-
-    print('Mse Loss:', total_loss / len(dataloader))
-    print('Accuracy:', accuracy)
-    print('Std:', class_std)
-    print('Max: ', max_dist)
+    #
+    # for x, y in dataset:
+    #     x = x.to(device)
+    #     y = y.to(device)
+    #     p = model(x)
+    #
+    #     loss = loss_func(p, y)
+    #     total_loss += loss.item()
+    #
+    #     dis = torch.sqrt(torch.sum((p - y) ** 2))
+    #
+    #     data_class = int(x[0])
+    #     predict_num[data_class] += 1
+    #     class_std[data_class] += (accuracy[data_class] - dis.item()) ** 2
+    # class_std = class_std / predict_num
+    #
+    # print('Mse Loss:', total_loss / len(dataloader))
+    # print('Accuracy:', accuracy)
+    # print('Std:', class_std)
+    # print('Max: ', max_dist)
 
     # Plot the true value and predicted value to compare them
-    x, y = dataset[100:200]
+    x, y = dataset[300:320]
     x = x.to(device)
     y = y.to(device)
     p = model(x)
@@ -97,10 +97,10 @@ test_data_path = './Data/test_data.csv'
 test_dataset = DispDataset(test_data_path)
 
 # Initialize the model
-model = AcDispNet(3, 2)
+model = AcDispNetL8(3, 2)
 
 # Test
-model.load_state_dict(torch.load('checkpoints/model.pth'))
+model.load_state_dict(torch.load('checkpoints/model_final.pth'))
 model.eval()
 # valid_loss = test(train_dataset, model)
 test_loss = test(test_dataset, model)

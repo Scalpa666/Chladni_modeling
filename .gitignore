@@ -6,3 +6,7 @@
 
 /results/train/*
 !results/train/.gitkeep
+
+/docs/*
+
+/checkpoints/*
