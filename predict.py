@@ -2,23 +2,24 @@ import torch
 import numpy as np
 import pandas as pd
 
-from models.model import AcDispNet
+from models.model import AcDispNetL4
 
-# Initialize the model and load the weights
-model = AcDispNet(3, 2)
-model.load_state_dict(torch.load('checkpoints/model.pth'))
-model.eval()
 
 # Configuration parameter
 GRID_SIZE = 50
-FREQ_CLASSES = 12 # Frequency category
+FREQ_CLASSES = 31 # Frequency category
 OUTPUT_FILE = 'results/predict/displacement_field' + str(GRID_SIZE) + '.csv'
 
 # Generate displacement predictions for all frequencies and coordinate points
 def generate_displacements():
-    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # print('Use device:', device)
-    # model.to(device)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print('Use device:', device)
+
+    # Initialize the model and load the weights
+    model = AcDispNetL4(3, 2)
+    model.load_state_dict(torch.load('checkpoints/model_final_1.pth', weights_only=True))
+    model.to(device)
+    model.eval()
 
     # Generate a normalized coordinate grid
     x = torch.linspace(0.5 / GRID_SIZE, 1 - 0.5 / GRID_SIZE, GRID_SIZE)
@@ -33,19 +34,22 @@ def generate_displacements():
     # Initialize the lag for CSV writer
     first_write = True
 
-    # Traverse all frequency classes
-    for freq_idx in range(FREQ_CLASSES):
+    normalized_values = [i / (FREQ_CLASSES - 1) for i in range(FREQ_CLASSES)]
 
-        class_channel = torch.full((GRID_SIZE, GRID_SIZE), freq_idx)
+    # Traverse all frequency classes
+    for freq_idx, value in enumerate(normalized_values):
+
+        class_channel = torch.full((GRID_SIZE, GRID_SIZE), value)
         inputs = torch.stack([class_channel, grid_x, grid_y], dim=-1).unsqueeze(0)
+        inputs = inputs.to(device)
 
         # Use model to predict
         with torch.no_grad():
             outputs = model(inputs)
 
         # Fetch results
-        dx = outputs[0, :, :, 0].numpy().flatten() * 10
-        dy = outputs[0, :, :, 1].numpy().flatten() * 10
+        dx = outputs[0, :, :, 0].cpu().numpy().flatten()
+        dy = outputs[0, :, :, 1].cpu().numpy().flatten()
 
 
         # Build the DataFrame for the current class

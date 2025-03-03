@@ -10,32 +10,6 @@ from models.model import *
 from models.dataset import DispDataset
 
 
-def acc(dataset, model):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.to(device)
-    predict_dist = np.zeros(12)
-    max_predict_dist = np.zeros(12)
-    min_predict_dist = np.ones(12) * 100
-    predict_num = np.zeros(12)
-    for x, y in dataset:
-        x = x.to(device)
-        y = y.to(device)
-        p = model(x)
-        dis = torch.sqrt(torch.sum((p - y) ** 2))
-        data_class = int(x[0])
-        predict_dist[data_class] += dis.item()
-        predict_num[data_class] += 1
-        if dis.item() > max_predict_dist[data_class]:
-            max_predict_dist[data_class] = dis.item()
-        if dis.item() < min_predict_dist[data_class]:
-            min_predict_dist[data_class] = dis.item()
-    predict_dist = predict_dist / predict_num
-    predict_dist = predict_dist.tolist()
-    max_predict_dist = max_predict_dist.tolist()
-    print('Min: ', min_predict_dist)
-    return predict_dist, max_predict_dist
-
-
 def test(dataset, model):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print('Use device:', device)
@@ -44,63 +18,56 @@ def test(dataset, model):
     loss_func = nn.MSELoss()
     dataloader = DataLoader(dataset, batch_size=64, shuffle=True)
 
-    # accuracy, max_dist = acc(dataset, model)
-    # class_std = np.zeros(12)
-    # predict_num = np.zeros(12)
+    metrics = RegressionMetrics(device)
     total_loss = 0
-    #
-    # for x, y in dataset:
-    #     x = x.to(device)
-    #     y = y.to(device)
-    #     p = model(x)
-    #
-    #     loss = loss_func(p, y)
-    #     total_loss += loss.item()
-    #
-    #     dis = torch.sqrt(torch.sum((p - y) ** 2))
-    #
-    #     data_class = int(x[0])
-    #     predict_num[data_class] += 1
-    #     class_std[data_class] += (accuracy[data_class] - dis.item()) ** 2
-    # class_std = class_std / predict_num
-    #
-    # print('Mse Loss:', total_loss / len(dataloader))
-    # print('Accuracy:', accuracy)
-    # print('Std:', class_std)
-    # print('Max: ', max_dist)
+    for inputs, targets in dataloader:
+        # Migrate data to the GPU
+        inputs = inputs.to(device)
+        targets = targets.to(device)
+
+        # Forward propagation
+        outputs = model(inputs)
+        loss = loss_func(outputs, targets)
+
+        total_loss += loss.item()
+        metrics.update(outputs, targets)
+
+    avg_loss = total_loss / len(dataloader)
+    mae, mse = metrics.compute()
+    print(f"Test Loss: {avg_loss} - MAE: {mae} - MSE: {mse:.4f}")
 
     # Plot the true value and predicted value to compare them
-    x, y = dataset[300:320]
-    x = x.to(device)
-    y = y.to(device)
-    p = model(x)
+    inputs, targets = dataset[300:320]
+    inputs = inputs.to(device)
+    targets = targets.to(device)
+    outputs = model(inputs)
 
-    x = x.cpu().detach().numpy()
-    y = y.cpu().detach().numpy()
-    p = p.cpu().detach().numpy()
+    inputs = inputs.cpu().detach().numpy()
+    targets = targets.cpu().detach().numpy()
+    outputs = outputs.cpu().detach().numpy()
 
     plt.figure()
     ax = plt.axes(projection='3d')
-    ax.scatter3D(x[:, -2], x[:, -1], y[:, 1], c='r', label='Input')
-    ax.scatter3D(x[:, -2], x[:, -1], p[:, 1], c='b', label='Predict')
+    ax.scatter3D(inputs[:, -2], inputs[:, -1], targets[:, 1], c='r', label='Target')
+    ax.scatter3D(inputs[:, -2], inputs[:, -1], outputs[:, 1], c='b', label='Predict')
     ax.set_xlabel('x')
     ax.set_ylabel('y')
     ax.set_zlabel('z')
     plt.legend()
     plt.show()
 
-    return total_loss / len(dataloader)
 
 
-# Read data form the file
-test_data_path = './Data/test_data.csv'
-test_dataset = DispDataset(test_data_path)
+if __name__ == "__main__":
+    # Read data form the file
+    test_data_path = './Data/test_data.csv'
+    test_dataset = DispDataset(test_data_path)
 
-# Initialize the model
-model = AcDispNetL8(3, 2)
+    # Initialize the model
+    model = AcDispNetL4(3, 2)
 
-# Test
-model.load_state_dict(torch.load('checkpoints/model_final.pth'))
-model.eval()
-# valid_loss = test(train_dataset, model)
-test_loss = test(test_dataset, model)
+    # Test
+    model.load_state_dict(torch.load('checkpoints/model_final_1.pth',  weights_only=True))
+    model.eval()
+    # valid_loss = test(train_dataset, model)
+    test(test_dataset, model)

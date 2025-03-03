@@ -1,5 +1,7 @@
 import torch
 import torch.nn as nn
+from torchmetrics import MeanAbsoluteError, MeanSquaredError
+
 
 # Define neural network for modeling acoustic displacement field
 class AcDispNetL4(nn.Module):
@@ -42,3 +44,19 @@ class AcDispNetL8(nn.Module):
 
     def forward(self, x):
         return self.seq(x)
+
+
+class RegressionMetrics:
+    def __init__(self, device):
+        self.device = device
+        self.mae = MeanAbsoluteError().to(device)
+        self.mse = MeanSquaredError().to(device)
+
+    def update(self, outputs, targets):
+        self.mae.update(outputs, targets)
+        self.mse.update(outputs, targets)
+
+    def compute(self):
+        mae = self.mae.compute()
+        mse = self.mse.compute()
+        return mae, mse

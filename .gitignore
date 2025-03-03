@@ -1,4 +1,6 @@
-/data/*
+/data/*/
+/data/*.csv
+/data/split.py
 !data/.gitkeep
 
 /results/predict/*

@@ -100,23 +100,18 @@ def normalize(df: pd.DataFrame) -> pd.DataFrame:
     normalized_df = df.copy()
 
     # Apply min-max normalization to 'X' and 'Y' columns
-    for column in ['X', 'Y']:
+    for column in ['X1', 'Y1', 'Frequency_ID', 'X2', 'Y2']:
         if column in df.columns:
             normalized_df[column] = min_max_normalize(df[column])
         else:
             raise KeyError(f"The column '{column}' does not exist in the DataFrame !")
 
-    # Apply z-score normalization to 'deltaX' and 'deltaY' columns
-    for column in ['deltaX', 'deltaY']:
-        if column in df.columns:
-            normalized_df[column] = z_score_normalize(df[column])
-        else:
-            raise KeyError(f"The column '{column}' does not exist in the DataFrame !")
-
-    if 'Frequency_ID' in df.columns:
-        normalized_df['Frequency_ID'] = min_max_normalize(df['Frequency_ID'])
-    else:
-        raise KeyError(f"The column '{'Frequency_ID'}' does not exist in the DataFrame !")
+    # # Apply z-score normalization to 'deltaX' and 'deltaY' columns
+    # for column in ['deltaX', 'deltaY']:
+    #     if column in df.columns:
+    #         normalized_df[column] = z_score_normalize(df[column])
+    #     else:
+    #         raise KeyError(f"The column '{column}' does not exist in the DataFrame !")
 
     return normalized_df
 
@@ -179,15 +174,15 @@ def split_dataset(df):
 
 if __name__ == "__main__":
     # Read the dataset
-    data_path = "./Data/train_data_1.csv"
+    data_path = "./Data/full_data_1.csv"
     df = pd.read_csv(data_path)
 
     # filtered_df = filter_outliers(df)
 
-    # normalize_df = normalize(filtered_df )
+    normalize_df = normalize(df)
     # normalize_df.to_csv("./Data/normalized_data.csv", index=False)
-    print_stats(df)
+    print_stats(normalize_df)
 
-    # split_dataset(normalize_df)
+    split_dataset(normalize_df)
 
     # split_dataset(df)

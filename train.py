@@ -4,28 +4,10 @@ import torch.optim as optim
 import torch
 import numpy as np
 from torch.utils.data import DataLoader
-from torchmetrics import MeanAbsoluteError, MeanSquaredError
 import matplotlib.pyplot as plt
 
 from models.model import *
 from models.dataset import DispDataset
-
-
-class RegressionMetrics:
-    def __init__(self):
-        self.mae = MeanAbsoluteError()
-        self.mse = MeanSquaredError()
-        self.r2 = None
-
-    def update(self, outputs, targets):
-        self.mae.update(outputs, targets)
-        self.mse.update(outputs, targets)
-
-    def compute(self):
-        mae = self.mae.compute()
-        mse = self.mse.compute()
-        # rmse = torch.sqrt(mse)
-        return mae, mse
 
 
 def train(total_epochs, dataset, model):
@@ -58,7 +40,7 @@ def train(total_epochs, dataset, model):
 
     # Record the average loss per epoch
     avg_loss_list = []
-    metrics = RegressionMetrics()
+    metrics = RegressionMetrics(device)
     for epoch in range(total_epochs):
         total_loss = 0
         for inputs, targets in dataloader:
@@ -76,8 +58,6 @@ def train(total_epochs, dataset, model):
             optimizer.step()
 
             total_loss += loss.item()
-            targets = targets.to('cpu')
-            outputs = outputs.to('cpu')
             metrics.update(outputs, targets)
 
         if epoch % 10 == 0:
@@ -106,7 +86,7 @@ def train(total_epochs, dataset, model):
     plt.show()
 
     # Save the model
-    torch.save(model.state_dict(), 'checkpoints/model_final.pth')
+    torch.save(model.state_dict(), 'checkpoints/model_final_1.pth')
 
     # Save the data during training
     loss_df = pd.DataFrame(avg_loss_list, columns=['Epoch', 'Loss'])
@@ -115,7 +95,7 @@ def train(total_epochs, dataset, model):
 
 if __name__ == "__main__":
     # Read data form the file
-    train_data_path = './Data/train_data_1.csv'
+    train_data_path = './Data/train_data.csv'
     train_dataset = DispDataset(train_data_path)
 
     # print('Len of dataset:', len(dataset))
@@ -131,4 +111,4 @@ if __name__ == "__main__":
         print(model.state_dict()[param_tensor])
 
     # Train
-    train(10000, train_dataset, model)
+    train(1000, train_dataset, model)
